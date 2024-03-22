@@ -1,0 +1,228 @@
+---
+title: "Unraveling Temporal Patterns A SARIMA-based Investigation into Room Night
+  Occupancy Trends in Victoria"
+output: pdf_document
+date: "2023-12-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary  
+
+This research investigates the aggregate number of room nights occupied in hotels, motels, and guesthouses across Victoria, Australia, from January 1980 to June 1995. The analysis reveals a clear upward linear trend and seasonal patterns in the data, suggesting the presence of both non-stationarity and seasonality. To effectively capture these characteristics, the SARIMA(1, 1, 1)*(1, 1, 1) model is identified as the most suitable for forecasting room night occupancy. Subsequent model diagnostic tests demonstrate that the residuals exhibit a symmetrical distribution yet deviate from the normality assumption. Despite this, the model upholds its forecasting capabilities, as predicted values closely align with actual data, suggesting its reliability and potential for informing local government decisions in the tourism sector.
+
+\vspace{24pt}
+## 1. Introudction
+  
+Tourism holds a pivotal role in propelling the Australian economy, exerting a substantial influence on GDP, employment, and export earnings. As one of the nation's largest industries, it employs over 600,000 individuals and stands as a cornerstone of Australia's economic advancement, playing a vital role in fostering prosperity. This article delves into an examination of the aggregate number of room nights occupied in hotels, motels, and guesthouses across Victoria, Australia, spanning from January 1980 to June 1995. With abundant tourism resources, Victoria's total hotel bookings serve as a representative indicator of the broader tourism sector. Analyzing development trends aids in comprehending Australia's tourism industry model, extracting valuable insights, and offering recommendations to local governments.  
+
+\vspace{12pt}
+
+The dataset, sourced from the Australian Bureau of Statistics, comprises time series data. Leveraging the R software, we employ time series modeling to unveil statistical characteristics, discern trends, and identify seasonality within the series. Post-trend and seasonality removal, ACF and PACF guide the model selection process, with multiple candidate models compared using the AICc criterion. The ultimate choice is the SARIMA(0, 1, 1)*(1, 1, 1) model. During the model diagnosis phase, the ADF test demonstrates that residuals lack relevant information, aligning with fundamental model assumptions. However, the Q-Q plot and Shapiro-Wilk test indicate non-compliance with the normality assumption. Subsequently, model predictions are executed, revealing commendable performance in the test set. The predicted data closely mirrors actual data, and the 95% prediction interval entirely encompasses real data.  
+
+\newpage
+## 2. Series Decomposition and Transformation  
+
+The dataset comprises 186 data points spanning from January 1980 to December 1989, with January 1990 serving as the demarcation point for dividing the data into training and validation sets. The data from January to Dec 1989 are incorporated into the training set. The training set accounts for 65% of the data, while the validation set comprises the remaining 35%. We employ the training set to identify an appropriate model for the sequence.
+
+\vspace{12pt}
+Figure 1 depicts the time series diagram and decomposition, revealing a distinct upward linear trend and seasonal patterns. The number of room nights occupied is higher during spring and autumn months, while it is lower during summer and winter months. Observing the ACF and PACF plots in Figure 2, we notice that the ACF of the original sequence exhibits a long tail and retains significant values at high lags, indicating non-stationarity. ACF and PACF spikes at lags 12, 24, and 36 further confirm the presence of a strong monthly seasonal effect in the series. To address the non-stationarity, we first employ first-order differencing to eliminate the trend term. This effectively reduces the tail of the autocorrelation function, but ACF and PACF still exhibit spikes at lags 12, 24, and 36. To address the seasonal effect, we subsequently apply a 12-step differencing. The resulting time series plot, shown in Figure 3, no longer exhibits any apparent trend or seasonal effects.
+The enhanced unit root test was conducted to assess the stationary of the first and seasonality differenced time series. The test statistic yielded a p-value of 0.01, leading to the rejection of the null hypothesis and the confirmation of stationary in the first and seasonality differenced time series.
+
+```{r}
+library(tsdl)
+
+# Select tourism data with frequency of 12
+tourism <- subset(tsdl, 12, "Transport and tourism")   
+# Select total number of room nights occupied
+rooms_ts <- ts(tourism[[2]][, 1], start = 1980, frequency = 12)  
+
+# Split into training dataset and test dataset
+rooms_train <- ts(rooms_ts[1:120], start = 1980, frequency = 12)
+rooms_test <-  ts(rooms_ts[121:186], start = 1992, frequency = 12)
+```
+
+
+
+```{r fig-ts_decompose, fig.cap="Time series plot and decomposition", fig.align='center'}
+# Component decomposition
+plot(decompose(rooms_train))                                   
+```
+
+```{r fig-acfs, fig.cap="ACF plots and PACF plots for original series, differencing series and first and seasonality differences series"}
+par(mfrow = c(3, 2))
+# Get differential series
+y_1 <- diff(rooms_train, 1)
+y_12 <- diff(y_1, 12)
+
+# Plot ACFs and PACFs
+acf(rooms_train, lag.max = 60, main = "ACF: Original Time Series")
+pacf(rooms_train, lag.max = 60, main = "PACF: Original Time Series")
+
+acf(y_1, lag.max = 60, main = "ACF:  First Differencing of Time Series")
+pacf(y_1, lag.max = 60, main = "PACF: First Differencing of Time Series")
+
+acf(y_12, lag.max = 60, main = "ACF: First and Seasonally Differenced Time Series")
+pacf(y_12, lag.max = 60, main = "PACF: First and Seasonally Differenced Time Series")
+
+```
+
+
+```{r fig-sea_plot, out.width= '80%', out.height= '80%',fig.cap="First and Seasonally Differenced Time Series", fig.align='center'}
+par(mfcol=c(1,1))
+plot(y_12, ylab = "",
+     main = "First and Seasonally Differenced Time Series")
+```
+
+```{r warning=FALSE, message=FALSE}
+# Stationary test
+library(tseries)
+adf.test(y_12)
+```
+
+
+\newpage
+
+## 3. Model Identification
+After identifying the presence of trend and seasonality, I opted for a SARIMA model and proceeded to determine its optimal order based on the ACF and PACF plots of first and seasonally differenced series (third row in Figure 3).
+
+(1) Modeling the seasonal part (P, D, Q): For this part, focus on the seasonal lags h = 1s,    
+     2s, etc.
+  - We applied one seasonal differencing so D = 1 at lag s = 12.
+  - The ACF shows a strong peak at h = 1s without peak at 2s, 3s. Then a good choice for the  
+   MA part could be Q=1 
+  - The PACF shows two strong peaks at h = 1s without peak at 2s, 3s. Then a good choice for  
+   the AR part could be P = 1.
+
+(2) Modeling the non-seasonal part (p , d, q): In this case focus on the within season lags, h   
+      = 1,. . . ,11.
+  - We applied one differencing to remove the trend: d = 1
+  - The ACF seems to cut off at lag 1 or 2. Then a good choice for the MA part could be q =   
+  1 or q = 2 respectively.
+  - The PACF cuts off at lag h=1 or 2. A good choice for the AR part could be p = 1 or p = 1.
+
+Therefore, we have four candidate models now and they are  
+
+(i) SAIMAR(1, 1, 1)*(1, 1, 1). 
+\vspace{8pt}
+(ii) SAIMAR(1, 1, 2)*(1, 1, 1)
+\vspace{8pt}
+(iii) SAIMAR(2, 1, 1)*(1, 1, 1)
+\vspace{8pt}
+(iv) SAIMAR(2, 1, 2)*(1, 1, 1)
+
+\newpage
+## 4. Model Estimation  
+\vspace{12pt}
+
+Using the maximum likelihood method, we estimated the four candidate models and fixed non-significant coefficients to 0, followed by re-estimation. Table 1 presents the results. We found that SARMIA(1, 1, 1)*(1, 1, 1) has the smallest AICc, indicating its superiority among the four models. And the fitted model equation is 
+$$
+(1+0.549B^{12})(1-B^{12})y_t=(1-0.5527B)\epsilon_t
+$$
+where $y_t$ denotes the Victoria's total hotel bookings and $\epsilon_t$ denotes the error terms
+
+```{r warning=FALSE}
+# Model estimations
+library(astsa)
+fit1 <- sarima(xdata = rooms_train, p = 1, d =1, q =1, 
+               P = 1, D = 1, Q = 1, S = 12, details = F)
+fit1.1 <- sarima(xdata = rooms_train, p = 1, d =1, q =1, 
+                 P = 1, D = 1, Q = 1, S = 12, details = F, fixed=c(0,NA,NA,0))
+
+fit2 <- sarima(xdata = rooms_train, p = 1, d =1, q =2, 
+               P = 1, D = 1, Q = 1, S = 12, details = F)
+fit2.1 <- sarima(xdata = rooms_train, p = 1, d =1, q =2, 
+                 P = 1, D = 1, Q = 1, S = 12, details = F, fixed=c(0,0,0,NA,0))
+
+fit3 <- sarima(xdata = rooms_train, p = 2, d =1, q =1, 
+               P = 1, D = 1, Q = 1, S = 12, details = F)
+fit3.1 <- sarima(xdata = rooms_train, p = 2, d =1, q =1, 
+                 P = 1, D = 1, Q = 1, S = 12, details = F, fixed=c(NA,NA,0,NA,0))
+
+fit4 <- sarima(xdata = rooms_train, p = 2, d =1, q =2, 
+               P = 1, D = 1, Q = 1, S = 12, details = F)
+fit4.1 <- sarima(xdata = rooms_train, p = 2, d =1, q =2, 
+                 P = 1, D = 1, Q = 1, S = 12, details = F, fixed=c(NA,NA,0,0,NA,0))
+```
+
+```{r echo=FALSE, out.width= '65%', out.height= '65%', fig.align='center'}
+knitr::include_graphics("table.png")
+```
+
+
+## 5. Model diagnoses and Forecast 
+\vspace{12pt}
+To ensure the model's effectiveness, we assessed the residuals to verify their adherence to the white noise process. Examining the residual histogram in Figure 1 revealed a symmetrical distribution, although the peak appeared higher than that of a standard normal distribution. The Q-Q plot further indicated deviations from the straight line, particularly in the lower left and upper right corners, raising concerns about the model's normality assumption. The Shapiro-Wilk test confirmed our suspicions, rejecting the null hypothesis and revealing that the residuals did not conform to the normal distribution.
+\vspace{12pt}
+To determine the adequacy of the model, we conducted the Box-Pierce and Ljung-Box tests. The p-values of 0.271 and 0.21, respectively, indicated that the residuals exhibited no significant autocorrelation. Further, employing the yule-walker method of the ar function resulted in an automatically determined order of 0 for the residual sequence, further supporting the model's ability to capture the underlying structure without introducing spurious correlations.
+\vspace{12pt}
+Finally, we validated the model's performance by applying it to the validation set and generating the corresponding 95% prediction interval. The predicted values closely mirrored the actual data, while the 95% prediction interval completely enveloped the real data, demonstrating the model's reliable forecasting capabilities.  
+
+```{r warning=FALSE}
+# Fit the final model
+fit <- arima(rooms_train, order=c(1,1,1), seasonal = 
+               list(order = c(1,1,1) ,period = 12) , fixed=c(0,NA,NA,0), method="ML")
+```
+
+
+```{r fig-diag, fig.cap="Model diagnoses plots", fig.align='center'}
+par(mfrow = c(2,2))
+residuals <- residuals(fit)            # Obtain the residual
+
+# Histogram of residual
+hist(residuals, breaks = 30, freq = F, main  = "Histogram of residual of fit")
+curve(dnorm(x, mean(residuals), sd(residuals)), add = T, col = "red")
+
+# Time series of residuals
+plot.ts(residuals, main = "Residuals plot of fit")
+abline(h = 0, col = "red")
+
+# Q-Q plot of residuals
+qqnorm(residuals, pch = 16, main = "Normal Q-Q plot for fit")
+qqline(residuals, col = "red")
+shapiro.test(residuals)                         # Test for normality
+```
+
+
+```{r}
+# White noise test
+Box.test(residuals, lag = 10, type = c("Box-Pierce"))
+Box.test(residuals, lag = 10, type = c("Ljung-Box"))
+
+ar(residuals, aic = TRUE, order.max = NULL, method = c("yule-walker"))
+```
+
+```{r warning=FALSE}
+# Prediction
+library(forecast)
+n.head = length(rooms_test)      
+pred.tr <- predict(fit, n.ahead = n.head)
+
+U.tr= pred.tr$pred + 2*pred.tr$se
+L.tr= pred.tr$pred - 2*pred.tr$se
+```
+
+
+```{r fig-pred, fig.cap="Prediction in test set", fig.align='center'}
+par(mfrow = c(1, 1))
+ts.plot(rooms_ts, ylab = "Number of Rooms")
+lines(pred.tr$pred, col = "red")
+lines(U.tr, col="grey", lty="dashed")
+lines(L.tr, col="grey", lty="dashed")
+legend("topleft", legend=c("Actual", "Predicted","Interval"), 
+       col=c("black", "red", "grey"), lty=c(1, 1, 2))
+
+```
+
+
+## Conclusion  
+\vspace{12pt}
+This research provides a comprehensive analysis of room night occupancy trends in the hospitality sector across Victoria, Australia, spanning the period from January 1980 to June 1995. Employing SARIMA modeling techniques, the study successfully identifies and addresses both upward linear trends and seasonal patterns in the data. The $SARIMA(1, 1, 1)*(1, 1, 1)$ model emerges as the most suitable for forecasting room night occupancy, showcasing its effectiveness in capturing the non-stationarity and seasonality inherent in the dataset. Despite encountering deviations from the normality assumption in the residuals, the SARIMA model maintains its forecasting prowess. Model diagnostic tests, including the Box-Pierce and Ljung-Box tests, confirm the absence of significant autocorrelation in the residuals. The yule-walker method further supports the model's ability to capture underlying structures without introducing spurious correlations. The practical application of the $SARIMA(1, 1, 1)*(1, 1, 1)$ model to the validation set demonstrates its reliability and accuracy. Predicted values closely align with actual data, and the 95% prediction interval fully encompasses real data points, affirming the model's robust forecasting capabilities. These findings suggest that the SARIMA model can serve as a valuable tool for informing local government decisions in the tourism sector, aiding in resource allocation, policy formulation, and strategic planning.
+
+\newpage
+## References
+[1] Hamilton, J. D. (2020). Time series analysis. Princeton university press.  
+
+[2] Harris, R., & Jago, L. (2001). Professional accreditation in the Australian tourism industry; an uncertain future. Tourism Management, 22(4), 383-390.  
