@@ -1,0 +1,667 @@
+---
+title: "Predicting Credit Risk"
+author: "Yanru Fang"
+output:
+    html_document:
+      toc: true
+      toc_float: true
+      code_folding: show
+toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+
+# Introduction
+
+In modern society with intricate web connection, credit stands as a pivotal element. It reflects the consumption habits and financial landscapes of consumers. It is not merely a gateway to acquiring loans from banks or the state. Its influence extends far into fields as personal as employment opportunities. An individual's credit score or level, can sometimes be a quantitative representation of their creditworthiness, and be regarded as a yardstick for their reliability and integrity from potential employers’ perspective.
+
+```{r}
+knitr::include_graphics('/Users/fangyaner/Desktop/Final Project/image/credit_risk.webp')
+```
+
+## Motive
+
+Have you ever found yourself in a situation where you had to make a critical financial decision, such as applying for a loan, and wished you can foresee the potential risks? In fact, the complexity and uncertainty surrounding credit risk assessment have always fascinated me. The idea of predicting whether an individual or a business will default on their credit obligations based on historical and current data is both challenging and rewarding.
+
+```{r, fig.align='center'}
+knitr::include_graphics('/Users/fangyaner/Desktop/Final Project/image/finanical_decision.jpeg')
+```
+
+After the tumultuous period of the 2008 subprime mortgage crisis, the significance of credit was emphasized to all over the world. This financial maelstrom was kind of triggered by the imprudent extension of loans to individuals or companies with subpar credit scores, who subsequently found themselves unable to fulfill the repayment obligations. This crisis drove people to reveal the fragile equilibrium within the financial sector, drawing attention to the critical need for robust risk assessment mechanisms.
+
+With the advancement of fintech, a number of sophisticated machine learning and deep learning algorithms are utilized for post-crisis. They offer unprecedented precision in identifying prime lending candidates. These models, however, remain limited known to public, due to their significance in profits. There inner workings are guarded as closely held trade secrets by financial institutions.
+
+This opacity raises a compelling question: how can individuals navigate to enhance their creditworthiness and emerge as prime candidates in the eyes of lenders? This project aims to unravel the mysteries of credit risk control models. By analyzing the prevail existing dataset, we want to uncover the construction of these models and illuminate the key factors that determine creditworthiness. We seek to empower general consumers with knowledge, enabling them to proactively improve their credit profiles and thus secure a favorable standing in the complex financial ecosystems of the modern world.
+
+## Data Description
+
+This data was taken from Kaggle, [German Credit Risk](https://www.kaggle.com/datasets/varunchawla30/german-credit-data) . It was offered by Prof. Hofmann from UCI, containing 1000 entries with 20 categorical/symbolic attributes such as age, sex, and housing. This dataset classifies people described by a set of attributes as good or bad credit risks.
+
+The dataset typically includes information such as age, gender, job status, credit history, existing loans, savings, and other financial indicators. These features are often categorical or numerical in nature, providing a comprehensive view of an individual’s financial standing. The dataset is typically structured in a tabular format, with each row representing an individual and each column representing a specific attribute.
+
+Before using the dataset for analysis or modeling, it often requires preprocessing and cleaning. This may involve handling missing values, encoding categorical variables, scaling numerical features, and removing or treating outliers. Additionally, exploring the dataset through statistical analysis and visualization techniques can help identify patterns, trends, and relationships between different variables.
+
+## Project Outline
+
+With a clear understanding of the German credit risk data and its importance, we embark on building a binary classification model. Our initial focus is on data cleaning, removing missing observations and irrelevant predictor variables. We aim to explore the relationship between key factors and credit risk, using a binary response variable “High Credit Risk” to indicate significant risk. After splitting the data into training and test sets, we will employ various modeling techniques such as Logistic Regression, Decision Trees, Random Forest, and Support Vector Machines. Our goal is to identify the best-performing model and assess its effectiveness in predicting credit risk accurately. Let’s begin our journey to a robust credit risk assessment model.
+
+# Loading Packages and Data
+
+First of all, we load all packages and the raw german credit data. And we have a glance to the first few rows. The data includes demographic variables (like age), and financial status (like savings, employment).
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tidymodels)
+library(readr)
+library(kknn)
+library(janitor)
+library(ISLR)
+library(discrim)
+library(poissonreg)
+library(glmnet)
+library(corrr)
+library(corrplot)
+library(randomForest)
+library(xgboost)
+library(rpart.plot)
+library(vip)
+library(ranger)
+library(kernlab)
+library(pROC)
+library(tidytext)
+library(ggplot2)
+
+credit<-read.csv('/Users/fangyaner/Desktop/Final Project/german_credit.csv')
+head(credit)
+```
+
+# Exploring Our Data
+
+## Tidying the Data
+
+First, we check the number of usable data entries. The data set is complete without any missing, containing 1000 rows and 21 columns. This means we have 1000 users and 21 variables. Our response variable is `credit_risk` in this data set, and with 20 predictors. Let's check what these predictors mean and what type they are. We also change those variables described by texts into factors and rearrange the levels of these factors.
+
+```{r, results = 'hide'}
+credit_colnames<-colnames(credit)
+credit <- credit %>% mutate(across(where(is.character), as.factor))
+colnames(credit)<- credit_colnames
+str(credit)
+
+levels(credit$number_credits)<-c('>=6', '1', '2-3','4-5')
+credit$number_credits<-factor(credit$number_credits, levels = c('1', '2-3', '4-5', '>=6'))
+
+levels(credit$status)
+credit$status<-factor(credit$status, levels = c( "... >= 200 DM / salary for at least 1 year", "0<= ... < 200 DM" , "... < 0 DM" , "no checking account"))
+```
+
+
+
+| Attribute               | Description (Type)                                                                                                                         |
+|------------------------|------------------------------------------------|
+| status                  | Status of existing checking account (Categorical) |
+| duration                | Duration (Integer: months)                                                                                                                 |
+| credit_history          | Credit history (Categorical)                          |
+| purpose                 | Purpose (Categorical)                                                                                                                      |
+| amount                  | Credit amount (Integer)                                                                                                                    |
+| savings                 | Savings account/bonds (Categorical)                                                                                                        |
+| employment_duration     | Present employment since (Categorical)                                                                                                     |
+| installment_rate        | Installment rate in percentage of disposable income (Categorical)                                                                              |
+| personal_status_sex     | Personal status and sex (Categorical)                                                                                                      |
+| other_debtors           | Other debtors / guarantors (Categorical)                                                                                                   |
+| present_residence       | Present residence since (Categorical)                                                                                                      |
+| property                | Property (Categorical)                                                                                                                     |
+| age                     | Age (Integer: years)                                                                                                                       |
+| other_installment_plans | Other installment plans (Categorical)                                                                                                      |
+| housing                 | Housing (Categorical: own, rent or free)                                                                                                                      |
+| number_credits          | Number of existing credits at this bank (Categorical)                                                                                      |
+| job                     | Job (Categorical)                                                                                                                          |
+| people_liable           | Number of people being liable to provide maintenance for (Categorical)                                                                     |
+| telephone               | Telephone (Binary: No or Yes)                                                                                                                         |
+| foreign_worker          | Foreign worker (Binary: No or Yes)                                                                                                                    |
+| credit_risk             | Credit risk (Binary: Good or Bad)                                                                                                          |
+
+From the data, the variables `present_residence`, `foreign_work` are highly correlated with the variable `housing`; The variable `employment_duration` can be reflected by the variable `job`. Also, the variable `telephone` does not appear to be relevant to the `credit_risk`. Therefore, we dropped these variables that I think is irrelevant with our response variable and kept those more crucial variables.
+
+```{r}
+drop <- c("employment_duration", "other_debtors", "present_residence", "other_installment_plans", 
+          "people_liable", "telephone", "foreign_worker")
+credit <- credit[,!(names(credit) %in% drop)]
+```
+
+## Visualizing the Data
+
+We selected some variables that I think are of great importance to identify risk and visualized them. We are going to find their relationships.
+
+### Good and Bad Credit Risk Distribution
+Before constructing the models for predicting credit risk, we can observe the notable imbalance between good and bad credit risks. Typically, the data contains more instances classified as good risk than those labeled as bad risk. This imbalance isn't just a statistical anomaly; it reflects underlying realities of the financial world and has important implications for model building and evaluation. Banks and other lenders have stringent lending criteria precisely to minimize the number of bad credit risks. Their lending strategies are designed to filter out potential borrowers with high risk of default, leading to a naturally higher proportion of good risk borrowers in the data that gets collected over time. In the German Credit Risk dataset, 300 individuals are classified as bad risks, while the count of those deemed good risks is more than double this number.
+
+```{r}
+credit %>% 
+  ggplot(aes(x = credit_risk)) +
+  geom_bar() + 
+  labs(x = "Credit risk", y = "Number", title = "Distribution of the Number of Credit risk")
+```
+
+
+
+### Status
+The data set categorizes individuals into four distinct groups based on their checking account status: 'no checking account', '< 0 DM', '0-200 Dollars per Month', and '>= 200 Dollars per month / salary for at least 1 year'. The status of one's checking account is an essential indicator of cash flow stability. Individuals without a checking account or < 0 DM Dollar per month / salary for at least one year tend to exhibit distribution of bad risk classifications. However, for those with a stable and substantial checking account balance (>= 200 DM / salary for at least 1 year), the likelihood of being regarded a good risk increases dramatically. It highlights the checking account balance as a significant predictor of credit risk and suggests a direct correlation between financial stability and creditworthiness.
+
+
+```{r}
+credit %>%
+  ggplot(aes(x = credit_risk, fill = status)) +
+  geom_bar(position = 'fill') +
+  labs(title = 'Distribution of Status')
+```
+
+### Credit History
+
+We further analyze five categories of credit history, which reveals that the bulk of individuals either have no prior credits or have duly paid back all credits. A minimal fraction of the data has a history of delayed payments, causing higher proportion of bad risks. Interestingly, individuals with a pristine repayment track record are predominantly classified as good risks. And having good credit history in this bank is beneficial to the current credit. This correlation underscores the weight of historical financial behavior in risk assessment, where past diligence in loan repayment substantially lowers the perceived risk.
+
+```{r}
+credit %>%
+  group_by(credit_risk) %>%
+  ggplot(aes(credit_history)) +
+  geom_bar(aes(fill = credit_risk)) +
+  theme(axis.text.x = element_text(angle = 10))
+```
+
+
+### Amount
+
+This variable refers to the amount of the credit. The distribution of the credit amount borrowed in good and bad risks group unveils a trend resembling a Poisson distribution, with a majority of loans not exceeding 5000. The data indicates a diminishing number of higher loan amounts. When borrowing larger sums, the bank take a more cautious approach with more stringent evaluation criteria. Notably, loans above 11,000 exhibit a significantly higher risk of default, indicating a direct relationship between the borrowed amount and the likelihood of a loan turning bad.
+
+```{r}
+credit %>%
+  ggplot(aes(amount, fill = credit_risk)) +
+  geom_histogram(position = "dodge", binwidth = 1000) +
+  labs(title = "Histogram by Group", x = "Value", y = "Count") +
+  theme_minimal()
+```
+
+### Duration
+
+The duration of the loan, measured in months, emerges as another crucial determinant of credit risk. We can notice a marked increase in the probability of a loan being classified as bad is observed for durations extending beyond 36 months (3 years). This finding suggests that longer loan terms are associated with increased uncertainty and risk, likely due to the extended exposure to potential financial instabilities over time.
+
+```{r}
+credit %>%
+  dplyr::mutate(duration = cut(duration, breaks = 
+                             seq(min(duration), max(duration), by = 5),
+                           include.lowest = TRUE)) %>%
+  group_by(credit_risk) %>%
+  ggplot(aes(duration)) +
+  geom_bar(aes(fill = credit_risk)) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+### Age
+
+A closer look at the age distribution relative to credit risk indicates that senior and elder age groups exhibit a heightened propensity towards being classified as bad risks. This observation might reflect varying factors, including fixed incomes or retirement status, which could influence the ability to meet long-term financial commitments.
+
+```{r}
+credit %>%
+  group_by(credit_risk) %>%
+  ggplot(aes(age)) +
+  geom_bar(aes(fill = credit_risk)) 
+```
+
+# Setting Up Models
+
+Now we are going to build our models with the pursuit of understanding how most important variables affect how good a credit/user is. We randomly split the data into training and testing sets, create our recipe and set up cross-validation to search the best hyperparameters for our models.
+
+## Splitting Train/Test Datasets
+
+Before we embark on the model training journey, our initial step involves segregating our data set into two distinct subsets to avoid data divulge: one for training and another for testing. The purpose of the training set is to train our models, allowing them to learn from the data. Conversely, the testing set serves as a crucial tool, where our models are evaluated on data they haven’t encountered during the training phase. For fair comparison, we stratify the data by the ratio of bad and good risks.
+
+```{r}
+set.seed(2024)
+credit_split <- initial_split(credit, prop = 0.7, 
+                              strata = credit_risk)
+credit_train <- training(credit_split)
+credit_test <- testing(credit_split)
+```
+
+Dimensions of our credit training dataset:
+```{r}
+dim(credit_train)
+```
+
+Dimensions of our credit testing dataset:
+```{r}
+dim(credit_test)
+```
+
+The proportion of training set is approximately 70%. The training data has 699 observations while the testing data has 301 observations.
+
+## Creating Our Recipe
+
+Merging our predictors with the response variable, we're poised to craft our recipe—a foundational blueprint that will guide the construction of all our models. Think of each variable as a unique ingredient, each contributing its essence to the culminating dish. 
+
+Within our recipe, we integrate a curated selection of variables, utilizing 13 out of the 20 available predictors, which are `status`, `duration`, `credit_history`, `purpose`, `amount`, `savings`, `installment_rate`, `personal_status_sex`, `property`, `age`, `housing`, `number_credits` and `job`. This selective incorporation is strategic which is described in previous part of this report, aimed at distilling the most influential factors that interplay with our response variable. 
+
+Below is the fully realized recipe, designed to exploit the collective power of our chosen predictors in forecasting the response variable with precision. Since those variables are categorical and not continuous, we will make `status`, `credit_history`, `purpose`, `savings`, `installment_rate`, `personal_status_sex`, `property`, `housing`, `number_credits`, and `job` into dummy variables. 
+```{r}
+credit_recipe <- recipe(credit_risk ~ status + duration + credit_history + purpose + 
+                          amount + savings + installment_rate +personal_status_sex + 
+                          property + age + housing + number_credits + job,
+                        data=credit) %>%
+  step_dummy(status, credit_history, purpose,savings, installment_rate, 
+             personal_status_sex, property,housing, number_credits, job) %>% 
+  step_scale(all_predictors()) %>% # standardizing our predictors
+  step_center(all_predictors())
+```
+
+## K-Fold Cross Validation
+To enhance the robustness and reliability of our model evaluations, we'll employ a 10-fold stratified cross-validation approach. This technique partitions the training dataset into 10 distinct folds,  ensuring each observation is allocated to a unique fold. Each fold intermittently serves as the testing set, with the amalgamation of the remaining 9 folds forming the corresponding training set. This cyclic process ensures that every fold is used for testing exactly once, ending in a comprehensive evaluation across 10 distinct training-testing scenarios. It is useful for hyperparameters selection and avoiding overfitting.
+
+```{r}
+my_folds <- vfold_cv(credit_train, v = 10, strata = credit_risk)
+```
+
+
+# Building Models
+It is exciting to build our models now. Given the computational costs and time required to run complex models, we saved the results from each model. For the evaluation metric, the Area Under the Receiver Operating Characteristic Curve (AUC) has been selected. The AUC is a pivotal measure in the field of binary classification models, providing a comprehensive overview of model performance across various threshold settings. It essentially quantifies the ability of a model to distinguish between the two classes—good and bad credit risks—in our case. The higher the AUC, the better the model is at predicting good risks as good and bad risks as bad, regardless of the classification threshold applied. I have fitted 7 models to the German Credit dataset, and only select the best-performing model, based on their AUC scores, for a more in-depth analysis.
+
+```{r, fig.align='center'}
+knitr::include_graphics('/Users/fangyaner/Desktop/Final Project/image/risk.gif')
+```
+
+
+## Training Models
+
+We employed similar process to build every type of models as follows:
+
+
+### 1. Model Specification. 
+
+Specifying the model, including any hyperparameters, the engine the model comes from, and the mode (set to classification).
+
+```{r}
+# Logistic Regression
+log_reg <- logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+
+# Ridge Regression
+ridge_spec <- logistic_reg(mixture = 0,
+                         penalty = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet")
+
+#LDA
+lda_mod <- discrim_linear() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+
+# QDA
+qda_mod <- discrim_quad() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+
+# Decision Tree
+tree_spec <- decision_tree(cost_complexity = tune()) %>%
+  set_engine("rpart") %>% 
+  set_mode("classification")
+
+# Random Forest
+rf_spec <- rand_forest(mtry = tune(), 
+                       trees = tune(), 
+                       min_n = tune()) %>% 
+  set_engine("ranger", importance = "impurity") %>% 
+  set_mode("classification")
+
+# SVM
+svm_linear_spec <- svm_poly(degree = 1, cost = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+```
+
+### 2. Workflow Setup. 
+
+Creating a workflow object that encompass both the model and the pre-processing recipe. The workflow ensures that the same pre-processing steps are applied consistently across all model fittings and predictions.
+
+```{r}
+# Logistic Regression
+log_workflow <- workflow() %>% 
+  add_recipe(credit_recipe) %>% 
+  add_model(log_reg)
+
+# Ridge Regression
+ridge_workflow <- workflow() %>% 
+  add_recipe(credit_recipe) %>% 
+  add_model(ridge_spec)
+
+
+#LDA
+lda_workflow <- workflow() %>% 
+  add_recipe(credit_recipe) %>% 
+  add_model(lda_mod)
+
+## QDA
+qda_workflow <- workflow() %>% 
+  add_recipe(credit_recipe) %>% 
+  add_model(qda_mod)
+
+## Decision Tree
+tree_workflow <- workflow() %>% 
+  add_recipe(credit_recipe) %>% 
+  add_model(tree_spec)
+
+## random forest
+rf_workflow <- workflow() %>% 
+  add_recipe(credit_recipe) %>% 
+  add_model(rf_spec)
+
+## SVM
+svm_linear_workflow <- workflow() %>% 
+  add_recipe(credit_recipe) %>% 
+  add_model(svm_linear_spec)
+
+```
+
+### 3. Tune Grid Creation. 
+
+Define a tuning grid that specifies the ranges and levels for each parameter that we plan to tune.
+
+```{r}
+## LOGISTIC REGRESSION 
+## No grid because no tuning parameters
+
+## RIDGE REGRESSION
+ridge_grid <- grid_regular(penalty(range = c(-5,5)), levels = 50)
+
+## LDA
+## No grid because no tuning parameters
+
+## QDA
+## No grid because no tuning parameters
+
+## DECISION TREE
+tree_grid <- grid_regular(cost_complexity(range = c(-3, -1)), levels = 10)
+
+## RANDOM FOREST
+rf_grid <- grid_regular(mtry(range = c(1, 12)), 
+                        trees(range = c(200,600)), 
+                        min_n(range = c(5,10)), 
+                        levels = 5)
+
+## SVM
+svm_linear_grid <- grid_regular(cost(), levels = 5)
+```
+
+### 4. Model Tuning.
+
+Use k-fold cross-validation to tune the model parameters based on the defined tuning grid.
+```{r, results='hide'}
+# LINEAR REGRESSION 
+## No tuning
+
+# RIDGE REGRESSION
+ridge_tune <- tune_grid(
+  ridge_workflow,
+  resamples = my_folds,
+  grid = ridge_grid
+)
+
+# LDA
+## No tuning
+
+# QDA
+## No tuning
+
+# DECISION TREE
+tree_tune <- tune_grid(
+  tree_workflow,
+  resamples = my_folds,
+  grid = tree_grid
+)
+
+
+# RANDOM FOREST
+rf_tune <- tune_grid(
+  rf_workflow,
+  resamples = my_folds,
+  grid = rf_grid
+)
+
+# SVM
+svm_linear_tune <- tune_grid(
+  svm_linear_workflow,
+  resamples = my_folds,
+  grid = svm_linear_grid
+)
+```
+
+### 5. Saving Tuned Models. 
+
+After tuning the models, we save the results to an RDS file to preserve the tuned models and bypass the time-consuming tuning process in the future.
+
+```{r}
+# LINEAR REGRESSION 
+# No tuning
+
+# RIDGE REGRESSION
+write_rds(ridge_tune, 
+          file = "/Users/fangyaner/Desktop/Final Project/tuned_models/ridge.rds")
+
+# LDA
+## No tuning
+
+# QDA
+## No tuning
+
+# DECISION TREE
+write_rds(tree_tune, 
+          file = "/Users/fangyaner/Desktop/Final Project/tuned_models/decision_tree.rds")
+
+# RANDOM FOREST
+write_rds(rf_tune, 
+          file = "/Users/fangyaner/Desktop/Final Project/tuned_models/rf.rds")
+
+# SVM
+write_rds(svm_linear_tune, 
+          file = "/Users/fangyaner/Desktop/Final Project/tuned_models/svm_linear.rds")
+```
+
+### 6. Reloading Tuned Models.
+
+Load in back the tuned models.
+
+```{r}
+# LINEAR REGRESSION 
+# No tuning
+
+# RIDGE REGRESSION
+ridge_tuned <- read_rds(ridge_tune, 
+                        file = "/Users/fangyaner/Desktop/Final Project/tuned_models/ridge.rds")
+
+# LDA
+## No tuning
+
+# QDA
+## No tuning
+
+# DECISION TREE
+tree_tuned <- read_rds(tree_tune, 
+                       file = "/Users/fangyaner/Desktop/Final Project/tuned_models/decision_tree.rds")
+
+# RANDOM FOREST
+rf_tuned <- read_rds(rf_tune, 
+                     file = "/Users/fangyaner/Desktop/Final Project/tuned_models/rf.rds")
+
+# SVM
+svm_linear_tuned <- read_rds(svm_linear_tune, 
+                             file = "/Users/fangyaner/Desktop/Final Project/tuned_models/svm_linear.rds")
+
+```
+
+Specifically, we skip Step 3-6 for those models that do not have parameters, such as logistic regression.
+
+### 7. Metrics Collection. 
+
+Collect the metrics of those tuned models with highest ROC_AUC and save the metrics for comparison.
+
+```{r, results='hide'}
+# LINEAR REGRESSION 
+# Fitting the linear regression to the folds first (since it had no tuning)
+log_fit <- fit_resamples(log_workflow, resamples = my_folds)
+log_auc <- collect_metrics(log_fit)%>%
+  dplyr::slice(2)
+  
+# RIDGE REGRESSION
+ridge_auc <- collect_metrics(ridge_tuned) %>% 
+  arrange(desc(mean)) %>%
+  dplyr::slice(1)
+
+#LDA
+lda_fit <- fit_resamples(lda_workflow, resamples = my_folds)
+lda_auc <- collect_metrics(lda_fit)%>%
+  dplyr::slice(2)
+
+# QDA
+qda_fit <- fit_resamples(qda_workflow, resamples = my_folds)
+qda_auc <- collect_metrics(qda_fit)%>%
+  dplyr::slice(2)
+
+# Decision Tree
+tree_auc <- collect_metrics(tree_tuned) %>% 
+  arrange(desc(mean)) %>%
+  dplyr::slice(1)
+
+# Random Forest
+rf_auc <- collect_metrics(rf_tuned) %>% 
+  arrange(desc(mean)) %>%
+  dplyr::slice(1)
+
+#SVM
+svm_linear_auc <- collect_metrics(svm_linear_tuned) %>% 
+  arrange(desc(mean)) %>%
+  dplyr::slice(1)
+```
+
+# Model Results
+Finally, we are going to compare the results of all models we build and see which one is the best.
+
+```{r}
+final_compare_tibble <- tibble(Model = c("Logistic Regression", 
+                                         "Ridge Regression", "LDA", "QDA", 
+                                         "Decision Tree", "Random Forest", "SVM"), 
+                               ROC_AUC = c(log_auc$mean, ridge_auc$mean, 
+                                           lda_auc$mean, qda_auc$mean, 
+                                           tree_auc$mean, rf_auc$mean, 
+                                           svm_linear_auc$mean))
+
+# Arranging by lowest ROC_AUC
+final_compare_tibble <- final_compare_tibble %>% 
+  arrange(ROC_AUC)
+
+final_compare_tibble
+```
+
+```{r}
+model_frame <- data.frame(Model = c("Logistic Regression", 
+                                    "Ridge Regression", "LDA", "QDA", 
+                                    "Decision Tree", "Random Forest", "SVM"),
+                          ROC_AUC = c(log_auc$mean, ridge_auc$mean, 
+                                      lda_auc$mean, qda_auc$mean, 
+                                      tree_auc$mean, rf_auc$mean, 
+                                      svm_linear_auc$mean))
+ggplot(model_frame, aes(x = Model, y = ROC_AUC)) +
+  geom_bar(stat = 'identity', aes(fill = Model)) +
+  scale_fill_manual(values = c('pink1', 'yellow1', 'pink2', 'yellow2', 'pink3', 
+                               'yellow3', 'pink4')) +
+  theme(legend.position = 'none') +
+  labs(title = 'Compare ROC_AUC of Each Model')
+```
+
+From the data above, we can see that the random forest model emerged as the frontrunner with superior performance relative to its counterparts. This was closely followed by Ridge Regression, LDA, and SVM, each showing commendable predictive capabilities. On the contrary, QDA and Decision Tree lagged behind, as the least impressive results. It shows our data is probably linear.
+
+
+## Results of the Best Model
+```{r}
+autoplot(rf_tuned, metric = 'roc_auc')
+```
+
+In tuning our Random Forest model, we focused on three key parameters: the minimal node size, the number of randomly selected predictors, and the number of trees. We cap the number of randomly selected predictors at 12, instead of including all 13, to circumvent the potential pitfalls associated with creating a bagging model. Firstly, the minimal node size showed a surprisingly minimal influence on the model's effectiveness. Conversely, the number of trees demonstrated a clear correlation with performance: more trees consistently led to improved classification accuracy. This enhancement can be attributed to the increased diversity in decision-making, as more trees provide a broader perspective for the model to learn from. However, the number of predictors emerged as a critical determinant of performance. Contrary to expectations that a higher number of predictors would automatically lead to better outcomes, our data visualizations pointed to an optimal range of 2-3 predictors. This sweet spot appears to maximize the ROC_AUC, emphasizing the importance of feature selection in enhancing model performance.
+
+Finally, random forest with 3 predictors, 300 trees, and a minimal node size of 10 performed the best with ROC_AUC of 0.7581673!
+
+```{r}
+rf_auc
+```
+### Fitting to Training Data
+In order to comprehensively fitting, we apply the optimized random forest model to our training data set by using the entire data set. 
+```{r}
+best_rf_train <- select_best(rf_tuned, metric = 'roc_auc')
+rf_final_workflow_train <- finalize_workflow(rf_workflow, best_rf_train)
+rf_final_fit_train <- fit(rf_final_workflow_train, data = credit_train)
+summary(rf_final_fit_train)
+
+write_rds(rf_final_fit_train, file = "/Users/fangyaner/Desktop/Final Project/rf_final/rf_final_train.rds")
+```
+### Testing the Model
+When we transition to the evaluation stage, we assess the model's efficacy on the testing data set as this data remained unseen by the model during its training phase. 
+```{r}
+# Loading in the training data fit
+rf_final_fit_train <- read_rds(file = "/Users/fangyaner/Desktop/Final Project/rf_final/rf_final_train.rds")
+
+# Creating the predicted vs. actual value tibble
+credit_tibble <- predict(rf_final_fit_train, new_data = credit_test %>% dplyr::select(-credit_risk), type = 'prob' )
+credit_tibble <- bind_cols(credit_tibble, credit_test %>% dplyr::select(credit_risk))
+
+# Save
+write_rds(credit_tibble, file = "/Users/fangyaner/Desktop/Final Project/rf_final/final_model.rds")
+
+```
+
+```{r}
+# Load in final model
+credit_tibble <- read_rds(file = "/Users/fangyaner/Desktop/Final Project/rf_final/final_model.rds")
+
+# Collecting the roc_auc of the model on the testing data
+
+credit_test_roc <- roc(credit_tibble$credit_risk, credit_tibble$.pred_good)
+credit_test_auc <- auc(credit_test_roc)
+credit_test_auc
+```
+Remarkably, the model surpassed expectations, showcasing an enhanced performance on the testing set with an ROC_AUC score of 0.8091, outperforming its cross-validation results.
+
+
+### Variable Importance
+
+A distinctive advantage of random forest models lies in their ability to delineate the significance of various predictors in the outcome. The variable importance plot (VIP) emerged as a key tool in this context. It illuminates the predictors that wielded the most influence on the model's predictions. 
+
+```{r}
+# Loading in the training data fit
+rf_final_fit_train <- read_rds(file = "/Users/fangyaner/Desktop/Final Project/rf_final/rf_final_train.rds")
+
+# Using the training fit to create the VIP because the model was not actually fit to the testing data
+rf_final_fit_train %>% 
+  extract_fit_engine() %>% 
+  vip(aesthetics = list(fill = "red", color = "yellow"))
+```
+
+Consistent with our initial hypothesis and previous observations, the amount of credit, loan duration and the borrower's age are the paramount predictor. This finding not only validates our predictive assumptions but also underscores the value of these variables in determining credit risk outcomes.
+
+
+# Conclusion
+
+```{r, fig.align='center'}
+knitr::include_graphics('/Users/fangyaner/Desktop/Final Project/image/credibility.jpeg')
+```
+
+In conclusion, we explored the German Credit dataset and built 7 models to classify the good and bad risks. Our deeper analysis on the random forest forest have yielded insightful and encouraging results. By tuning the model and testing it on unseen data, we have demonstrated the model's robustness and predictive power, especially with an impressive ROC_AUC score of 0.8091 on the testing set. This performance not only validates the effectiveness of random forests in handling complex data but also highlights the model's superiority in generalizing beyond the training data.
+
+The analysis on variable importance enriched our understanding. The amount of credit, loan duration, and borrower's age are key determinants in predicting credit risk outcomes. These findings align with intuitive financial reasoning and strengthen the significance of these variables in the credit assessment process. Looking ahead, these results pave stages for further research and application. The insights gained could be used to refine credit risk models and help banks and users to improve credibility.
+
+In conclusion, this project has been a valuable exercise in applying machine learning techniques to a real-world dataset. The experience gained in data preprocessing, feature engineering, model selection, and evaluation has been invaluable. The resulting Random Forest model, while not perfect, provides a solid foundation for future iterations and improvements. As we continue to refine our approach and explore new techniques, we can only hope to achieve even greater levels of accuracy and predictive power in the realm of credit risk classification.
+
+```{r, fig.align='center'}
+knitr::include_graphics('/Users/fangyaner/Desktop/Final Project/image/thankyou.gif')
+```
+

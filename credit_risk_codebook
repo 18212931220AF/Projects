@@ -1,0 +1,21 @@
+status: status of existing checking account.
+duration: the duration in months for which the loan is requested.
+credit_history: the applicant’s past credit behavior, including repayments and defaults.
+purpose: the intended use of the loan, such as buying a car, furniture, or for business purposes.
+amount: the total amount of money requested for the loan.
+savings: the applicant’s savings status.
+employment_duration: the applicant’s current employment status, including whether they are employed, unemployed, or self-employed. 
+installment_rate: the percentage of the applicant’s disposable income that would go towards repaying the loan.
+personal_status_sex: personal status and sex.
+other_debtos: whether the applicant has co-applicants or guarantors who are liable for the loan in case of default.
+present_residence: the applicant’s current residence.
+property: property.
+age: the applicant’s age in years.
+other_installment_plans: whether the applicant has any existing installment plans with other creditors.
+housing: the type of housing arrangement the applicant has, such as renting, owning, or living with parents.
+number_credits: the number and type of existing credit lines the applicant has.
+job: specifies the applicant’s occupation.
+people_liable: Number of people being liable to provide maintenance for.
+telephone: whether the applicant has a telephone connection at their residence.
+foreign_worker: whether the applicant is a foreign worker or not.
+credit_risk: Credit Risk.
